@@ -1,0 +1,9 @@
+pak-scanner — Chivalry 2 mod pak security scanner
+
+Builds on:
+- UnchainedLauncher.UnrealModScanner (Chivalry 2 Unchained), licensed GPLv3 —
+  used for CUE4Parse-based pak parsing and Chivalry 2 asset models.
+- CUE4Parse (MIT), transitively, for UE4.25 asset parsing.
+
+Because it links UnchainedLauncher (GPLv3), pak-scanner is licensed under the
+GNU General Public License v3.0. See LICENSE.
