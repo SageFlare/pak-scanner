@@ -21,21 +21,19 @@ public class LaunchUrlReachabilityTests
     }
 
     [Fact]
-    public void Entry_paths_with_a_modmarker_are_detected()
+    public void Names_referencing_the_modmarker_class_are_detected_regardless_of_filename()
     {
-        var paths = new[]
-        {
-            "TBL/Content/Mods/AgMods/X/X.uasset",
-            "TBL/Content/Mods/AgMods/X/ModMarker.uasset",
-        };
-        Assert.True(LaunchUrlRule.HasModMarker(paths));
+        // Content-based: the asset references the DA_ModMarker class. Renaming the file does not
+        // change these names, so the detection survives the C2 evasion.
+        var names = new[] { "DA_ModMarker_C", "ModActors", "Default__DA_ModMarker_C" };
+        Assert.True(LaunchUrlRule.NamesIndicateModMarker(names));
     }
 
     [Fact]
-    public void Entry_paths_without_a_modmarker_are_not()
+    public void Names_without_a_modmarker_class_are_not()
     {
-        var paths = new[] { "TBL/Content/Mods/X/BP_Thing.uasset" };
-        Assert.False(LaunchUrlRule.HasModMarker(paths));
+        var names = new[] { "StaticMesh", "Material", "BeginPlay" };
+        Assert.False(LaunchUrlRule.NamesIndicateModMarker(names));
     }
 
     [Fact]

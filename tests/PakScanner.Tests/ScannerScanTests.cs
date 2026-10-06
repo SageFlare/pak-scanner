@@ -45,7 +45,7 @@ public class ScannerScanTests
         // Regression: the LaunchURL BP asset is Zlib-compressed. Without zlib-ng initialized,
         // the asset read failed silently and the pak scored Benign (a missed malicious pak).
         var pak = CorpusSample("launch_url_attempt.pak");
-        if (!File.Exists(pak)) return; // pen-test sample is user-authored; skip if absent
+        Assert.True(File.Exists(pak), $"corpus sample missing: {pak}");
         var scanner = new SecurityScanner(new ISecurityRule[] { new LaunchUrlRule() });
         var result = scanner.Scan(pak);
         Assert.Contains(result.Findings, f => f.Rule == "launch_url");
@@ -58,7 +58,7 @@ public class ScannerScanTests
         // The mod-actor (ArgonSDKModBase + DA_ModMarker) auto-spawns on load, so LaunchURL is
         // reachable -> FlaggedActive, distinct from the loose BP which is FlaggedLatent.
         var pak = CorpusSample("zz_launch_url_delivered.pak");
-        if (!File.Exists(pak)) return;
+        Assert.True(File.Exists(pak), $"corpus sample missing: {pak}");
         var scanner = new SecurityScanner(new ISecurityRule[] { new LaunchUrlRule() });
         var result = scanner.Scan(pak);
         Assert.Equal(Verdict.FlaggedActive, result.Verdict);
@@ -68,7 +68,7 @@ public class ScannerScanTests
     public void AssetReplacement_attempt_pak_is_detected()
     {
         var pak = CorpusSample("asset_replacement_attempt.pak");
-        if (!File.Exists(pak)) return;
+        Assert.True(File.Exists(pak), $"corpus sample missing: {pak}");
         var scanner = new SecurityScanner(new ISecurityRule[] { new AssetReplacementRule() });
         var result = scanner.Scan(pak);
         Assert.Contains(result.Findings, f => f.Rule == "asset_replacement");
@@ -82,8 +82,10 @@ public class ScannerScanTests
         try
         {
             var result = new SecurityScanner(Array.Empty<ISecurityRule>()).Scan(tmp);
-            // A malformed pak must not throw; it yields a result (error recorded).
-            Assert.NotNull(result);
+            // C3: a malformed pak must not throw, must record an error, and must NOT be Benign —
+            // an input the scanner can't analyze is Indeterminate (a blocking state).
+            Assert.NotNull(result.Error);
+            Assert.Equal(Verdict.Indeterminate, result.Verdict);
         }
         finally
         {

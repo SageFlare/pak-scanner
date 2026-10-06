@@ -27,6 +27,7 @@ public sealed class SecurityScanner
         var findings = new List<Finding>();
         string? error = null;
         string? stageDir = null;
+        int unreadable = 0;
 
         try
         {
@@ -44,10 +45,23 @@ public sealed class SecurityScanner
             provider.LoadVirtualPaths();
 
             var entryPaths = provider.Files.Keys.ToList();
-            var target = new ScanTarget(provider, entryPaths);
 
-            foreach (var rule in _rules)
-                findings.AddRange(rule.Inspect(target));
+            // A non-empty .pak that mounts zero files did not parse as a valid pak — do not pass
+            // it off as Benign; the scanner could not see into it.
+            if (entryPaths.Count == 0)
+            {
+                error = "pak mounted no files; not a readable pak (analysis incomplete)";
+            }
+            else
+            {
+                var target = new ScanTarget(provider, entryPaths);
+                foreach (var rule in _rules)
+                    findings.AddRange(rule.Inspect(target));
+
+                unreadable = target.UnreadablePackages;
+                if (unreadable > 0)
+                    error = $"{unreadable} asset package(s) could not be read; analysis incomplete";
+            }
         }
         catch (Exception ex)
         {
@@ -58,9 +72,11 @@ public sealed class SecurityScanner
             TryCleanup(stageDir);
         }
 
-        var verdict = error is not null && findings.Count == 0
-            ? Verdict.FlaggedLatent           // unparseable/suspect input is not benign
-            : VerdictPolicy.Decide(findings);
+        // Analysis is complete only when nothing errored and every package was readable. An
+        // incomplete analysis can never be Benign — a reachable-high finding still escalates to
+        // FlaggedActive, otherwise an incomplete scan is Indeterminate (a blocking state).
+        var complete = error is null;
+        var verdict = VerdictPolicy.Decide(findings, analysisComplete: complete);
 
         return new ScanResult(pakPath, verdict, findings, error);
     }

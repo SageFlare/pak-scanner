@@ -26,4 +26,18 @@ public class VerdictTests
         Assert.Equal(
             Verdict.FlaggedLatent,
             VerdictPolicy.Decide(new[] { new Finding("r", "p", Severity.Low, true, "e") }));
+
+    [Fact]
+    public void Incomplete_analysis_with_no_findings_is_indeterminate_not_benign() =>
+        // C3/C4 regression: a parse failure or unreadable asset must not pass as Benign.
+        Assert.Equal(
+            Verdict.Indeterminate,
+            VerdictPolicy.Decide(Array.Empty<Finding>(), analysisComplete: false));
+
+    [Fact]
+    public void Incomplete_analysis_still_escalates_a_reachable_high_finding() =>
+        // If we DID find an active threat, incompleteness doesn't downgrade it.
+        Assert.Equal(
+            Verdict.FlaggedActive,
+            VerdictPolicy.Decide(new[] { new Finding("r", "p", Severity.High, true, "e") }, analysisComplete: false));
 }

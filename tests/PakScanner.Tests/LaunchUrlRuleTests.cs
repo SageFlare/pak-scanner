@@ -21,6 +21,17 @@ public class LaunchUrlRuleTests
         Assert.False(LaunchUrlRule.NamesIndicateLaunchUrl(names, out _));
     }
 
+    [Theory]
+    [InlineData("CallFunc_LaunchURL_ReturnValue")]
+    [InlineData("LaunchURL_0")]
+    [InlineData("ExecuteUbergraph_LaunchURL")]
+    public void Mangled_or_suffixed_launchurl_names_are_still_detected(string mangled)
+    {
+        // C1 regression: exact-equality missed these; substring must catch them.
+        var names = new[] { "BeginPlay", mangled };
+        Assert.True(LaunchUrlRule.NamesIndicateLaunchUrl(names, out _));
+    }
+
     [Fact]
     public void Detected_launch_url_is_high_but_unreachable_in_phase1()
     {

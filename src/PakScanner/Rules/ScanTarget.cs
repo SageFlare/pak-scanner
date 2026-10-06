@@ -33,16 +33,26 @@ public sealed class ScanTarget
     /// <summary>Virtual paths of every file in the pak (e.g. "TBL/Content/Mods/.../X.uasset").</summary>
     public IReadOnlyList<string> EntryPaths { get; }
 
+    /// <summary>
+    /// Count of asset packages that failed to load during this scan. A rule that can't read an
+    /// asset can't rule out a payload in it, so the scanner treats any unreadable package as
+    /// making the analysis incomplete (verdict cannot be Benign). See <see cref="SecurityScanner"/>.
+    /// </summary>
+    public int UnreadablePackages { get; private set; }
+
     /// <summary>Try to load an asset package by its virtual path. Returns null on failure or when no provider.</summary>
     public IPackage? TryLoadPackage(string path)
     {
         if (_provider is null) return null;
         try
         {
-            return _provider.TryLoadPackage(path, out var pkg) ? pkg : null;
+            if (_provider.TryLoadPackage(path, out var pkg)) return pkg;
+            UnreadablePackages++;   // provider reported it couldn't load this package
+            return null;
         }
         catch
         {
+            UnreadablePackages++;   // load threw — we could not see into this asset
             return null;
         }
     }

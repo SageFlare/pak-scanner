@@ -7,7 +7,7 @@ using PakScanner.Rules;
 if (args.Length == 0 || args[0] is "-h" or "--help")
 {
     Console.WriteLine("pak-scan <pak> [--json]");
-    Console.WriteLine("  Scans a Chivalry 2 mod .pak and reports benign / attempted / malicious.");
+    Console.WriteLine("  Scans a Chivalry 2 mod .pak and reports benign / flagged-latent / flagged-active.");
     return 1;
 }
 

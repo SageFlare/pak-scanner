@@ -8,7 +8,7 @@ namespace PakScanner.Findings;
 /// </summary>
 public enum Verdict
 {
-    /// <summary>No risky behavior detected.</summary>
+    /// <summary>No risky behavior detected and the pak was fully analyzed.</summary>
     Benign,
 
     /// <summary>A risky capability is present in the pak but would not execute as packaged.</summary>
@@ -16,6 +16,13 @@ public enum Verdict
 
     /// <summary>A risky behavior would execute when the mod loads.</summary>
     FlaggedActive,
+
+    /// <summary>
+    /// The pak could not be fully analyzed (parse failure, or one or more assets were unreadable).
+    /// An untrusted input the scanner cannot see into must NOT be treated as safe — this is a
+    /// blocking state, never Benign.
+    /// </summary>
+    Indeterminate,
 }
 
 public enum Severity { Low, Medium, High }
@@ -28,6 +35,7 @@ public static class VerdictNames
         Verdict.Benign => "benign",
         Verdict.FlaggedLatent => "flagged-latent",
         Verdict.FlaggedActive => "flagged-active",
+        Verdict.Indeterminate => "indeterminate",
         _ => "unknown",
     };
 }
@@ -35,14 +43,18 @@ public static class VerdictNames
 public static class VerdictPolicy
 {
     /// <summary>
+    /// Decides a verdict from findings and whether analysis was complete.
     /// A reachable high-severity finding means the behavior would execute on load: FlaggedActive.
     /// Any other finding means a capability present but not (known to be) executing: FlaggedLatent.
-    /// No findings: Benign.
+    /// If analysis was incomplete (parse error or unreadable assets) and nothing was already
+    /// flagged active, the result is Indeterminate — never Benign — so an untrusted pak the
+    /// scanner could not see into is not passed off as safe.
     /// </summary>
-    public static Verdict Decide(IEnumerable<Finding> findings)
+    public static Verdict Decide(IEnumerable<Finding> findings, bool analysisComplete = true)
     {
         var list = findings.ToList();
         if (list.Any(f => f.Reachable && f.Severity == Severity.High)) return Verdict.FlaggedActive;
+        if (!analysisComplete) return Verdict.Indeterminate;
         return list.Count > 0 ? Verdict.FlaggedLatent : Verdict.Benign;
     }
 }

@@ -16,43 +16,58 @@ public sealed class LaunchUrlRule : ISecurityRule
     public const string RuleName = "launch_url";
     private const string Token = "LaunchURL";
 
-    private static readonly string[] AssetExtensions = { ".uasset", ".uexp", ".umap" };
+    // Only primary package files are independently loadable. .uexp/.ubulk are side-files of a
+    // .uasset and must NOT be load-attempted (doing so counts false "unreadable" packages).
+    private static readonly string[] AssetExtensions = { ".uasset", ".umap" };
 
     private const string ModBaseToken = "ArgonSDKModBase";
 
+    private const string ModMarkerToken = "ModMarker";
+
     public IEnumerable<Finding> Inspect(ScanTarget target)
     {
-        // A LaunchURL BP that is an ArgonSDKModBase mod-actor AND ships with a DA_ModMarker is
-        // auto-spawned by the Unchained loader on match load -> its BeginPlay runs -> reachable.
-        var hasMarker = HasModMarker(target.EntryPaths);
-
+        // First pass: collect every asset's names, so we can judge delivery by CONTENTS (does the
+        // pak contain a DA_ModMarker asset, and is the LaunchURL BP an ArgonSDKModBase mod-actor)
+        // rather than by file naming, which an attacker controls.
+        var assetNames = new List<(string Path, List<string> Names)>();
         foreach (var path in target.EntryPaths)
         {
             if (!AssetExtensions.Any(e => path.EndsWith(e, StringComparison.OrdinalIgnoreCase)))
                 continue;
             var pkg = target.TryLoadPackage(path);
             if (pkg is null) continue;
-
             var names = pkg.NameMap.Select(n => n.Name).Where(n => n is not null).Cast<string>().ToList();
+            assetNames.Add((path, names));
+        }
+
+        // Delivery signal: some asset in the pak references the DA_ModMarker class (by content, not
+        // filename). The marker is what makes the Unchained loader auto-spawn the tagged actor.
+        var hasMarker = assetNames.Any(a => NamesIndicateModMarker(a.Names));
+
+        foreach (var (path, names) in assetNames)
+        {
             if (!NamesIndicateLaunchUrl(names, out var evidence))
                 continue;
 
             var delivered = hasMarker && NamesIndicateModActor(names);
             var fullEvidence = delivered
-                ? evidence + "; auto-spawned mod actor (ArgonSDKModBase + DA_ModMarker) -> runs on load"
+                ? evidence + "; auto-spawned mod actor (ArgonSDKModBase) with a DA_ModMarker present -> runs on load"
                 : evidence;
             yield return MakeFinding(path, fullEvidence, delivered);
         }
     }
 
-    /// <summary>True if the package's names reference the LaunchURL node. Testable seam.</summary>
+    /// <summary>
+    /// True if the package references the LaunchURL node. Uses substring (not exact equality) so
+    /// suffixed/mangled cooked forms (e.g. CallFunc_LaunchURL, LaunchURL_0) are still caught.
+    /// </summary>
     public static bool NamesIndicateLaunchUrl(IEnumerable<string> names, out string evidence)
     {
         foreach (var n in names)
         {
-            if (string.Equals(n, Token, StringComparison.OrdinalIgnoreCase))
+            if (n is not null && n.Contains(Token, StringComparison.OrdinalIgnoreCase))
             {
-                evidence = $"name table contains {Token}";
+                evidence = $"references {Token} ('{n}')";
                 return true;
             }
         }
@@ -64,10 +79,12 @@ public sealed class LaunchUrlRule : ISecurityRule
     public static bool NamesIndicateModActor(IEnumerable<string> names) =>
         names.Any(n => n is not null && n.Contains(ModBaseToken, StringComparison.OrdinalIgnoreCase));
 
-    /// <summary>True if any pak entry is a DA_ModMarker (makes the loader auto-spawn the tagged actor).</summary>
-    public static bool HasModMarker(IEnumerable<string> entryPaths) =>
-        entryPaths.Any(p => p is not null &&
-            Path.GetFileNameWithoutExtension(p).Contains("ModMarker", StringComparison.OrdinalIgnoreCase));
+    /// <summary>
+    /// True if the package references the DA_ModMarker class — detected by CONTENT (the class
+    /// name in the asset's name table), so renaming the marker file does not evade it.
+    /// </summary>
+    public static bool NamesIndicateModMarker(IEnumerable<string> names) =>
+        names.Any(n => n is not null && n.Contains(ModMarkerToken, StringComparison.OrdinalIgnoreCase));
 
     /// <summary>
     /// <paramref name="delivered"/> true when the node would execute on load (auto-spawned mod
