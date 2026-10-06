@@ -81,6 +81,19 @@ public class ScannerScanTests
     }
 
     [Fact]
+    public void Web_widget_pak_is_flagged_active_silent_beacon()
+    {
+        // TBLWebWidget.BrowseToUrl lives in a UserWidget created by an auto-spawned mod actor ->
+        // reachable (pak-level delivery) -> flagged-active. Guards the actor->widget link.
+        var pak = CorpusSample("zz_web_widget.pak");
+        Assert.True(File.Exists(pak), $"corpus sample missing: {pak}");
+        var scanner = new SecurityScanner(new ISecurityRule[] { new WebWidgetRule() });
+        var result = scanner.Scan(pak);
+        Assert.Equal(Verdict.FlaggedActive, result.Verdict);
+        Assert.Contains(result.Findings, f => f.Rule == "web_widget" && f.Reachable);
+    }
+
+    [Fact]
     public void Trojan_decoy_pak_is_flagged_active_despite_benign_decoy()
     {
         // A pak carrying a benign decoy mod AND a hidden markerless LaunchURL mod must still be

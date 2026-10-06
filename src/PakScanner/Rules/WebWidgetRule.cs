@@ -36,17 +36,23 @@ public sealed class WebWidgetRule : ISecurityRule
 
         var hasMarker = assetNames.Any(a => LaunchUrlRule.NamesIndicateModMarker(a.Names));
 
+        // Delivery is PAK-LEVEL: the web view lives in a UserWidget (UWidget), not the actor, but a
+        // mod actor creates that widget. If the pak contains ANY auto-spawned mod actor (an
+        // ArgonSDKModBase at the AgMods convention path, or a marker is present), the web-widget code
+        // it carries is reachable on load -> flagged-active. Otherwise flagged-latent.
+        var hasAutoSpawnedActor = assetNames.Any(a =>
+            LaunchUrlRule.NamesIndicateModActor(a.Names)
+            && (LaunchUrlRule.IsAgModsConventionPath(a.Path) || hasMarker));
+
         foreach (var (path, names) in assetNames)
         {
             if (!NamesIndicateWebWidget(names, out var evidence))
                 continue;
 
-            var delivered = LaunchUrlRule.NamesIndicateModActor(names)
-                            && (LaunchUrlRule.IsAgModsConventionPath(path) || hasMarker);
-            var full = delivered
-                ? evidence + "; auto-spawned mod actor -> runs on load (SILENT: in-game web view, no external browser)"
+            var full = hasAutoSpawnedActor
+                ? evidence + "; created by an auto-spawned mod actor in this pak -> runs on load (SILENT: in-game web view, no external browser)"
                 : evidence + " (SILENT: in-game web view, no external browser)";
-            yield return MakeFinding(path, full, delivered);
+            yield return MakeFinding(path, full, hasAutoSpawnedActor);
         }
     }
 
