@@ -75,6 +75,22 @@ public class ScannerScanTests
     }
 
     [Fact]
+    public void Oversized_pak_is_refused_not_ingested()
+    {
+        // I9: a pak over the size cap must be refused (Indeterminate), not copied+parsed.
+        var tmp = Path.Combine(Path.GetTempPath(), $"big_{Guid.NewGuid():N}.pak");
+        File.WriteAllBytes(tmp, new byte[1024]);
+        try
+        {
+            var scanner = new SecurityScanner(Array.Empty<ISecurityRule>(), maxPakBytes: 100);
+            var result = scanner.Scan(tmp);
+            Assert.Equal(Verdict.Indeterminate, result.Verdict);
+            Assert.Contains("cap", result.Error ?? "");
+        }
+        finally { File.Delete(tmp); }
+    }
+
+    [Fact]
     public void Garbage_file_is_handled_not_thrown()
     {
         var tmp = Path.Combine(Path.GetTempPath(), $"paktest_{Guid.NewGuid():N}.pak");

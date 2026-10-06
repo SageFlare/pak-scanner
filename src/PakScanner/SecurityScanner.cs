@@ -18,9 +18,17 @@ public sealed class SecurityScanner
     private const string ZeroAesKey =
         "0x0000000000000000000000000000000000000000000000000000000000000000";
 
-    private readonly IReadOnlyList<ISecurityRule> _rules;
+    /// <summary>Default cap on pak size the scanner will ingest (defends against oversized/bomb input).</summary>
+    public const long DefaultMaxPakBytes = 4L * 1024 * 1024 * 1024; // 4 GiB
 
-    public SecurityScanner(IEnumerable<ISecurityRule> rules) => _rules = rules.ToList();
+    private readonly IReadOnlyList<ISecurityRule> _rules;
+    private readonly long _maxPakBytes;
+
+    public SecurityScanner(IEnumerable<ISecurityRule> rules, long maxPakBytes = DefaultMaxPakBytes)
+    {
+        _rules = rules.ToList();
+        _maxPakBytes = maxPakBytes;
+    }
 
     public ScanResult Scan(string pakPath)
     {
@@ -35,7 +43,7 @@ public sealed class SecurityScanner
 
             // The provider works over a directory; stage just this pak in an isolated temp dir
             // so nothing else is mounted.
-            stageDir = StagePak(pakPath);
+            stageDir = StagePak(pakPath, _maxPakBytes);
 
             using var provider = new DefaultFileProvider(
                 stageDir, SearchOption.TopDirectoryOnly, isCaseInsensitive: true,
@@ -81,10 +89,14 @@ public sealed class SecurityScanner
         return new ScanResult(pakPath, verdict, findings, error);
     }
 
-    private static string StagePak(string pakPath)
+    private static string StagePak(string pakPath, long maxBytes)
     {
         if (!File.Exists(pakPath))
             throw new FileNotFoundException("pak not found", pakPath);
+        var size = new FileInfo(pakPath).Length;
+        if (size > maxBytes)
+            throw new InvalidOperationException(
+                $"pak is {size} bytes, over the {maxBytes}-byte scan cap; refusing to ingest");
         var dir = Path.Combine(Path.GetTempPath(), "pakscan_" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(dir);
         File.Copy(pakPath, Path.Combine(dir, Path.GetFileName(pakPath)), overwrite: true);
@@ -98,18 +110,37 @@ public sealed class SecurityScanner
     }
 
     private static bool _zlibReady;
+    private static readonly object _zlibLock = new();
 
     private static void EnsureZlib()
     {
         if (_zlibReady) return;
-        // CUE4Parse needs the zlib-ng native lib to read Zlib-compressed pak entries (most real
-        // paks). Without it, asset reads throw "Zlib decompression failed: not initialized" and a
-        // compressed malicious asset would be silently missed. Download it once (cached next to
-        // the executable) via CUE4Parse's own helper, then initialize.
-        var dllPath = Path.Combine(AppContext.BaseDirectory, ZlibHelper.DLL_NAME);
-        if (!File.Exists(dllPath))
-            ZlibHelper.DownloadDll(dllPath, ZlibHelper.DOWNLOAD_URL);
-        ZlibHelper.Initialize(dllPath);
-        _zlibReady = true;
+        lock (_zlibLock)
+        {
+            if (_zlibReady) return;
+            // CUE4Parse needs the zlib-ng native lib to read Zlib-compressed pak entries (most real
+            // paks). Without it, asset reads throw "Zlib decompression failed: not initialized" and
+            // a compressed malicious asset would be silently missed — so a failure here must be
+            // LOUD, not a silent degrade. Download it once (cached next to the executable) via
+            // CUE4Parse's helper, then initialize. If this throws, Scan() surfaces it as an error
+            // and the verdict becomes Indeterminate (never Benign). Only latch on success.
+            var dllPath = Path.Combine(AppContext.BaseDirectory, ZlibHelper.DLL_NAME);
+            if (!File.Exists(dllPath))
+            {
+                try
+                {
+                    ZlibHelper.DownloadDll(dllPath, ZlibHelper.DOWNLOAD_URL);
+                }
+                catch (Exception ex)
+                {
+                    throw new InvalidOperationException(
+                        "zlib-ng native lib is missing and could not be downloaded; cannot read "
+                        + "compressed paks (scan would be unreliable). Place "
+                        + $"'{ZlibHelper.DLL_NAME}' next to the executable. Inner: {ex.Message}", ex);
+                }
+            }
+            ZlibHelper.Initialize(dllPath);
+            _zlibReady = true;
+        }
     }
 }
