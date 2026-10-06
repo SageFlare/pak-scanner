@@ -65,6 +65,22 @@ public class ScannerScanTests
     }
 
     [Fact]
+    public void Benign_modpack_two_markered_mods_is_benign()
+    {
+        // Two legit mods in one pak, each WITH a marker -> both menu-visible -> hidden_mod must NOT
+        // fire. Guards against the hidden_mod rule false-positiving on honest multi-mod packs.
+        var pak = CorpusSample("benign_modpack.pak");
+        Assert.True(File.Exists(pak), $"corpus sample missing: {pak}");
+        var scanner = new SecurityScanner(new ISecurityRule[]
+        {
+            new AssetReplacementRule(), new LaunchUrlRule(), new HiddenModRule(),
+        });
+        var result = scanner.Scan(pak);
+        Assert.Equal(Verdict.Benign, result.Verdict);
+        Assert.Empty(result.Findings);
+    }
+
+    [Fact]
     public void Trojan_decoy_pak_is_flagged_active_despite_benign_decoy()
     {
         // A pak carrying a benign decoy mod AND a hidden markerless LaunchURL mod must still be
