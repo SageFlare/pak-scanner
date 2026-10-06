@@ -65,6 +65,19 @@ public class ScannerScanTests
     }
 
     [Fact]
+    public void Trojan_decoy_pak_is_flagged_active_despite_benign_decoy()
+    {
+        // A pak carrying a benign decoy mod AND a hidden markerless LaunchURL mod must still be
+        // flagged-active on the hidden one — the menu would only show the decoy.
+        var pak = CorpusSample("trojan_decoy.pak");
+        Assert.True(File.Exists(pak), $"corpus sample missing: {pak}");
+        var scanner = new SecurityScanner(new ISecurityRule[] { new LaunchUrlRule(), new AssetReplacementRule() });
+        var result = scanner.Scan(pak);
+        Assert.Equal(Verdict.FlaggedActive, result.Verdict);
+        Assert.Contains(result.Findings, f => f.Rule == "launch_url" && f.Reachable);
+    }
+
+    [Fact]
     public void AssetReplacement_attempt_pak_is_detected()
     {
         var pak = CorpusSample("asset_replacement_attempt.pak");
