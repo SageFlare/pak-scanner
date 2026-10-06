@@ -26,6 +26,19 @@ public class ScannerScanTests
         Assert.Equal(Verdict.Benign, result.Verdict);
     }
 
+    [Theory]
+    [InlineData("benign_map.pak")]
+    [InlineData("benign_cosmetic.pak")]
+    public void Real_benign_samples_score_benign_with_replacement_rule(string sample)
+    {
+        var pak = CorpusSample(sample);
+        Assert.True(File.Exists(pak), $"corpus sample missing: {pak}");
+        var scanner = new SecurityScanner(new ISecurityRule[] { new AssetReplacementRule() });
+        var result = scanner.Scan(pak);
+        Assert.Null(result.Error);
+        Assert.Equal(Verdict.Benign, result.Verdict);
+    }
+
     [Fact]
     public void Garbage_file_is_handled_not_thrown()
     {
