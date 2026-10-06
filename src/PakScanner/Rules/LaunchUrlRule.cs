@@ -18,8 +18,14 @@ public sealed class LaunchUrlRule : ISecurityRule
 
     private static readonly string[] AssetExtensions = { ".uasset", ".uexp", ".umap" };
 
+    private const string ModBaseToken = "ArgonSDKModBase";
+
     public IEnumerable<Finding> Inspect(ScanTarget target)
     {
+        // A LaunchURL BP that is an ArgonSDKModBase mod-actor AND ships with a DA_ModMarker is
+        // auto-spawned by the Unchained loader on match load -> its BeginPlay runs -> reachable.
+        var hasMarker = HasModMarker(target.EntryPaths);
+
         foreach (var path in target.EntryPaths)
         {
             if (!AssetExtensions.Any(e => path.EndsWith(e, StringComparison.OrdinalIgnoreCase)))
@@ -27,9 +33,15 @@ public sealed class LaunchUrlRule : ISecurityRule
             var pkg = target.TryLoadPackage(path);
             if (pkg is null) continue;
 
-            var names = pkg.NameMap.Select(n => n.Name).Where(n => n is not null).Cast<string>();
-            if (NamesIndicateLaunchUrl(names, out var evidence))
-                yield return MakeFinding(path, evidence);
+            var names = pkg.NameMap.Select(n => n.Name).Where(n => n is not null).Cast<string>().ToList();
+            if (!NamesIndicateLaunchUrl(names, out var evidence))
+                continue;
+
+            var delivered = hasMarker && NamesIndicateModActor(names);
+            var fullEvidence = delivered
+                ? evidence + "; auto-spawned mod actor (ArgonSDKModBase + DA_ModMarker) -> runs on load"
+                : evidence;
+            yield return MakeFinding(path, fullEvidence, delivered);
         }
     }
 
@@ -48,6 +60,19 @@ public sealed class LaunchUrlRule : ISecurityRule
         return false;
     }
 
-    public static Finding MakeFinding(string path, string evidence) =>
-        new(RuleName, path, Severity.High, Reachable: false, Evidence: evidence);
+    /// <summary>True if the names show this BP is an ArgonSDKModBase subclass (an auto-spawned mod actor).</summary>
+    public static bool NamesIndicateModActor(IEnumerable<string> names) =>
+        names.Any(n => n is not null && n.Contains(ModBaseToken, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>True if any pak entry is a DA_ModMarker (makes the loader auto-spawn the tagged actor).</summary>
+    public static bool HasModMarker(IEnumerable<string> entryPaths) =>
+        entryPaths.Any(p => p is not null &&
+            Path.GetFileNameWithoutExtension(p).Contains("ModMarker", StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>
+    /// <paramref name="delivered"/> true when the node would execute on load (auto-spawned mod
+    /// actor) -> Reachable -> FlaggedActive; false when only present in the file -> FlaggedLatent.
+    /// </summary>
+    public static Finding MakeFinding(string path, string evidence, bool delivered = false) =>
+        new(RuleName, path, Severity.High, Reachable: delivered, Evidence: evidence);
 }

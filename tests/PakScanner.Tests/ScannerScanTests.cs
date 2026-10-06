@@ -53,6 +53,18 @@ public class ScannerScanTests
     }
 
     [Fact]
+    public void Delivered_launch_url_pak_is_flagged_active()
+    {
+        // The mod-actor (ArgonSDKModBase + DA_ModMarker) auto-spawns on load, so LaunchURL is
+        // reachable -> FlaggedActive, distinct from the loose BP which is FlaggedLatent.
+        var pak = CorpusSample("zz_launch_url_delivered.pak");
+        if (!File.Exists(pak)) return;
+        var scanner = new SecurityScanner(new ISecurityRule[] { new LaunchUrlRule() });
+        var result = scanner.Scan(pak);
+        Assert.Equal(Verdict.FlaggedActive, result.Verdict);
+    }
+
+    [Fact]
     public void AssetReplacement_attempt_pak_is_detected()
     {
         var pak = CorpusSample("asset_replacement_attempt.pak");
