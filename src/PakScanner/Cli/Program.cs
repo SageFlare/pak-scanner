@@ -18,6 +18,7 @@ var scanner = new SecurityScanner(new ISecurityRule[]
 {
     new AssetReplacementRule(),
     new LaunchUrlRule(),
+    new HiddenModRule(),
 });
 
 var result = scanner.Scan(pak);
