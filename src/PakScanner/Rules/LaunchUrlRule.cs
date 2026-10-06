@@ -8,8 +8,8 @@ namespace PakScanner.Rules;
 /// the few dangerous built-in nodes a mod can actually call.
 ///
 /// Phase 1 detects *presence* in a package's name table (an attempt). Whether it is actually
-/// wired to run on an event — which would make it Reachable (Malicious) — is a Phase 2
-/// refinement; until then a detected LaunchURL is High severity but Reachable=false (Attempted).
+/// wired to run on an event — which would make it Reachable (FlaggedActive) — is a Phase 2
+/// refinement; until then a detected LaunchURL is High severity but Reachable=false (FlaggedLatent).
 /// </summary>
 public sealed class LaunchUrlRule : ISecurityRule
 {

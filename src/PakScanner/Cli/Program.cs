@@ -27,7 +27,7 @@ if (asJson)
     Console.WriteLine(JsonSerializer.Serialize(new
     {
         pak = result.Pak,
-        verdict = result.Verdict.ToString(),
+        verdict = result.Verdict.ToName(),
         error = result.Error,
         findings = result.Findings.Select(f => new
         {
@@ -40,11 +40,11 @@ else
     Console.WriteLine(ReportRenderer.Render(result));
 }
 
-// Exit code by verdict: 0 benign, 2 attempted, 3 malicious.
+// Exit code by verdict: 0 benign, 2 flagged-latent, 3 flagged-active.
 return result.Verdict switch
 {
     Verdict.Benign => 0,
-    Verdict.Attempted => 2,
-    Verdict.Malicious => 3,
+    Verdict.FlaggedLatent => 2,
+    Verdict.FlaggedActive => 3,
     _ => 1,
 };

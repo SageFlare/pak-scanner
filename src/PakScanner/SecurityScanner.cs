@@ -59,7 +59,7 @@ public sealed class SecurityScanner
         }
 
         var verdict = error is not null && findings.Count == 0
-            ? Verdict.Attempted           // unparseable/suspect input is not benign
+            ? Verdict.FlaggedLatent           // unparseable/suspect input is not benign
             : VerdictPolicy.Decide(findings);
 
         return new ScanResult(pakPath, verdict, findings, error);

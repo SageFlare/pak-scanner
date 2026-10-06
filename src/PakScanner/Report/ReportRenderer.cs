@@ -10,7 +10,7 @@ public static class ReportRenderer
     {
         var sb = new StringBuilder();
         sb.AppendLine($"PAK:     {result.Pak}");
-        sb.AppendLine($"Verdict: {result.Verdict}");
+        sb.AppendLine($"Verdict: {result.Verdict.ToName()}");
         if (result.Error is not null)
             sb.AppendLine($"Parse error: {result.Error}");
 
@@ -20,20 +20,21 @@ public static class ReportRenderer
             return sb.ToString();
         }
 
-        // Group by what the reader cares about: confirmed (reachable) vs attempts (not).
-        var confirmed = result.Findings.Where(f => f.Reachable).ToList();
-        var attempts = result.Findings.Where(f => !f.Reachable).ToList();
+        // Group by whether the behavior would execute as packaged (active) or is only present
+        // in the file (latent). Neither label asserts intent — a human judges each concern.
+        var active = result.Findings.Where(f => f.Reachable).ToList();
+        var latent = result.Findings.Where(f => !f.Reachable).ToList();
 
-        if (confirmed.Count > 0)
+        if (active.Count > 0)
         {
-            sb.AppendLine($"Confirmed issues ({confirmed.Count}):");
-            foreach (var f in confirmed)
+            sb.AppendLine($"Active (would execute on load) ({active.Count}):");
+            foreach (var f in active)
                 sb.AppendLine($"  [{f.Severity}] {f.Rule}: {f.Path} — {f.Evidence}");
         }
-        if (attempts.Count > 0)
+        if (latent.Count > 0)
         {
-            sb.AppendLine($"Attempts ({attempts.Count}):");
-            foreach (var f in attempts)
+            sb.AppendLine($"Latent (present, not executing as packaged) ({latent.Count}):");
+            foreach (var f in latent)
                 sb.AppendLine($"  [{f.Severity}] {f.Rule}: {f.Path} — {f.Evidence}");
         }
         return sb.ToString();
