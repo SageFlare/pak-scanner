@@ -40,8 +40,12 @@ public sealed class LaunchUrlRule : ISecurityRule
             assetNames.Add((path, names));
         }
 
-        // Delivery signal: some asset in the pak references the DA_ModMarker class (by content, not
-        // filename). The marker is what makes the Unchained loader auto-spawn the tagged actor.
+        // Delivery signal: the Unchained loader auto-spawns a mod actor when the launcher mod list
+        // names it, resolving BY NAME/PATH CONVENTION — /Game/Mods/AgMods/<Name>/<Name> cast to
+        // ArgonSDKModBase (verified from BPF_ModLoading: UNCN_GetModActorClassByName ->
+        // LoadSoftClassSynchronously). A DA_ModMarker is NOT required for the in-game spawn (it
+        // feeds editor/metadata tooling). So an ArgonSDKModBase LaunchURL actor delivers if EITHER
+        // it sits at the AgMods convention path OR a marker is present in the pak.
         var hasMarker = assetNames.Any(a => NamesIndicateModMarker(a.Names));
 
         foreach (var (path, names) in assetNames)
@@ -49,12 +53,38 @@ public sealed class LaunchUrlRule : ISecurityRule
             if (!NamesIndicateLaunchUrl(names, out var evidence))
                 continue;
 
-            var delivered = hasMarker && NamesIndicateModActor(names);
-            var fullEvidence = delivered
-                ? evidence + "; auto-spawned mod actor (ArgonSDKModBase) with a DA_ModMarker present -> runs on load"
-                : evidence;
+            var isModActor = NamesIndicateModActor(names);
+            var atConventionPath = IsAgModsConventionPath(path);
+            var delivered = isModActor && (atConventionPath || hasMarker);
+
+            string fullEvidence = evidence;
+            if (delivered)
+            {
+                var why = atConventionPath
+                    ? "ArgonSDKModBase actor at the AgMods auto-spawn path"
+                    : "ArgonSDKModBase actor with a DA_ModMarker present";
+                fullEvidence += $"; {why} -> runs on load";
+            }
             yield return MakeFinding(path, fullEvidence, delivered);
         }
+    }
+
+    /// <summary>
+    /// True if the entry sits at the Unchained auto-spawn convention path
+    /// TBL/Content/Mods/AgMods/&lt;Name&gt;/&lt;Name&gt;.uasset — the loader spawns the actor by this
+    /// name/path convention, so it fires on load with no marker asset required.
+    /// </summary>
+    public static bool IsAgModsConventionPath(string path)
+    {
+        var p = path.Replace('\\', '/');
+        const string prefix = "TBL/Content/Mods/AgMods/";
+        if (!p.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) return false;
+        var rest = p.Substring(prefix.Length);
+        var parts = rest.Split('/');
+        if (parts.Length != 2) return false;                 // exactly <Name>/<file>
+        var name = parts[0];
+        var file = System.IO.Path.GetFileNameWithoutExtension(parts[1]);
+        return name.Length > 0 && string.Equals(name, file, StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>

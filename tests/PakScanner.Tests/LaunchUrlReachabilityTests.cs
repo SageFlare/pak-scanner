@@ -36,6 +36,15 @@ public class LaunchUrlReachabilityTests
         Assert.False(LaunchUrlRule.NamesIndicateModMarker(names));
     }
 
+    [Theory]
+    [InlineData("TBL/Content/Mods/AgMods/EvilMod/EvilMod.uasset", true)]
+    [InlineData("TBL/Content/Mods/AgMods/EvilMod/EvilMod.umap", true)]
+    [InlineData("TBL/Content/Mods/AgMods/EvilMod/SomethingElse.uasset", false)] // not <Name>/<Name>
+    [InlineData("TBL/Content/Mods/AgMods/EvilMod/Sub/EvilMod.uasset", false)]   // nested, not convention
+    [InlineData("TBL/Content/Mods/PlainMod/PlainMod.uasset", false)]            // not under AgMods
+    public void AgMods_convention_path_is_recognized(string path, bool expected) =>
+        Assert.Equal(expected, LaunchUrlRule.IsAgModsConventionPath(path));
+
     [Fact]
     public void Delivered_finding_is_reachable_latent_finding_is_not()
     {
