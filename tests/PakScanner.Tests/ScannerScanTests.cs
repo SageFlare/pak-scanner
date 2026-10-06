@@ -40,6 +40,29 @@ public class ScannerScanTests
     }
 
     [Fact]
+    public void LaunchUrl_attempt_pak_is_detected()
+    {
+        // Regression: the LaunchURL BP asset is Zlib-compressed. Without zlib-ng initialized,
+        // the asset read failed silently and the pak scored Benign (a missed malicious pak).
+        var pak = CorpusSample("launch_url_attempt.pak");
+        if (!File.Exists(pak)) return; // pen-test sample is user-authored; skip if absent
+        var scanner = new SecurityScanner(new ISecurityRule[] { new LaunchUrlRule() });
+        var result = scanner.Scan(pak);
+        Assert.Contains(result.Findings, f => f.Rule == "launch_url");
+        Assert.NotEqual(Verdict.Benign, result.Verdict);
+    }
+
+    [Fact]
+    public void AssetReplacement_attempt_pak_is_detected()
+    {
+        var pak = CorpusSample("asset_replacement_attempt.pak");
+        if (!File.Exists(pak)) return;
+        var scanner = new SecurityScanner(new ISecurityRule[] { new AssetReplacementRule() });
+        var result = scanner.Scan(pak);
+        Assert.Contains(result.Findings, f => f.Rule == "asset_replacement");
+    }
+
+    [Fact]
     public void Garbage_file_is_handled_not_thrown()
     {
         var tmp = Path.Combine(Path.GetTempPath(), $"paktest_{Guid.NewGuid():N}.pak");

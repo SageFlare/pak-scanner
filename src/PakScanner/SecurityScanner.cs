@@ -86,12 +86,14 @@ public sealed class SecurityScanner
     private static void EnsureZlib()
     {
         if (_zlibReady) return;
-        // CUE4Parse needs zlib-ng for Zlib-compressed pak entries. Load it from the app dir if
-        // present; otherwise rely on CUE4Parse's managed path. (Phase 2: bundle the native lib.)
-        var lib = OperatingSystem.IsLinux() ? "libz-ng.so" : "zlib-ng2.dll";
-        var path = Path.Combine(AppContext.BaseDirectory, lib);
-        if (File.Exists(path))
-            ZlibHelper.Initialize(path);
+        // CUE4Parse needs the zlib-ng native lib to read Zlib-compressed pak entries (most real
+        // paks). Without it, asset reads throw "Zlib decompression failed: not initialized" and a
+        // compressed malicious asset would be silently missed. Download it once (cached next to
+        // the executable) via CUE4Parse's own helper, then initialize.
+        var dllPath = Path.Combine(AppContext.BaseDirectory, ZlibHelper.DLL_NAME);
+        if (!File.Exists(dllPath))
+            ZlibHelper.DownloadDll(dllPath, ZlibHelper.DOWNLOAD_URL);
+        ZlibHelper.Initialize(dllPath);
         _zlibReady = true;
     }
 }
