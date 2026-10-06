@@ -45,6 +45,11 @@ until a human judges it," and absence of a flag as "no *known* vector found," no
   obfuscation beyond the covered forms may evade it. The rule set grows with the pen-test corpus.
 - **zlib-ng native lib** is downloaded on first run to read compressed paks; if it can't be
   obtained the scan is Indeterminate (never a silent pass).
+- **Decompression bombs.** The scanner caps the *compressed* pak size (default 4 GiB) before
+  ingest, but CUE4Parse decompresses entries after that check with no decompressed-size ceiling.
+  A sub-cap pak that expands enormously could exhaust memory. This fails closed (an exception
+  becomes Indeterminate, never Benign), so it is an availability/DoS concern, not a
+  missed-detection one. Run the scanner in a resource-limited sandbox for fully untrusted input.
 
 The benchmark's headline metrics are over a small, self-authored corpus — evidence the covered
 vectors are caught, not proof of real-world completeness.

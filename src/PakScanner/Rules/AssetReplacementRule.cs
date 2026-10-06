@@ -59,15 +59,24 @@ public sealed class AssetReplacementRule : ISecurityRule
 
     /// <summary>
     /// Canonicalize a pak entry path so normalization tricks can't slip a game-dir path past the
-    /// prefix check: backslashes -> /, strip a leading "./", collapse repeated slashes, strip a
-    /// single leading slash.
+    /// prefix check: backslashes -> /, collapse repeated slashes, drop "." segments, resolve ".."
+    /// segments, strip a leading slash. Segment-based so embedded "/./" and "/../" are handled,
+    /// not just leading ones.
     /// </summary>
     internal static string Normalize(string path)
     {
-        var p = path.Replace('\\', '/');
-        while (p.StartsWith("./", StringComparison.Ordinal)) p = p.Substring(2);
-        while (p.Contains("//", StringComparison.Ordinal)) p = p.Replace("//", "/");
-        if (p.StartsWith('/')) p = p.Substring(1);
-        return p;
+        var raw = path.Replace('\\', '/');
+        var outSegs = new List<string>();
+        foreach (var seg in raw.Split('/'))
+        {
+            if (seg.Length == 0 || seg == ".") continue;          // drop empty (//) and "." segments
+            if (seg == "..")
+            {
+                if (outSegs.Count > 0) outSegs.RemoveAt(outSegs.Count - 1); // resolve ".."
+                continue;
+            }
+            outSegs.Add(seg);
+        }
+        return string.Join('/', outSegs);
     }
 }

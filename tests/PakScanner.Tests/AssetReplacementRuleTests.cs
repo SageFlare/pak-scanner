@@ -63,9 +63,12 @@ public class AssetReplacementRuleTests
     [InlineData("./TBL/Content/Blueprint/X.uasset")]
     [InlineData("TBL//Content/Blueprint/X.uasset")]
     [InlineData("/TBL/Content/Blueprint/X.uasset")]
+    [InlineData("TBL/./Content/Blueprint/X.uasset")]          // embedded /./
+    [InlineData("TBL/Content/Foo/../Blueprint/X.uasset")]     // embedded /../ resolving into a game dir
     public void Path_normalization_evasions_are_still_caught(string sneaky)
     {
-        // I6: leading ./, doubled //, or leading / must not slip a game-dir replacement past.
+        // I6: leading ./, doubled //, leading /, embedded /./ and /../ must not slip a game-dir
+        // replacement past the prefix check.
         var findings = new AssetReplacementRule().Inspect(Target(sneaky)).ToList();
         Assert.NotEmpty(findings);
     }
