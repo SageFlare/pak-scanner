@@ -81,16 +81,16 @@ public class ScannerScanTests
     }
 
     [Fact]
-    public void Web_widget_pak_is_flagged_active_silent_beacon()
+    public void Web_widget_pak_is_flagged_latent_inert_in_retail()
     {
-        // TBLWebWidget.BrowseToUrl lives in a UserWidget created by an auto-spawned mod actor ->
-        // reachable (pak-level delivery) -> flagged-active. Guards the actor->widget link.
+        // Live-tested: BrowseToUrl runs but the in-game web view (CEF) makes no request in retail
+        // Chiv2, so the capability is present-but-not-executing -> flagged-latent (not active).
         var pak = CorpusSample("zz_web_widget.pak");
         Assert.True(File.Exists(pak), $"corpus sample missing: {pak}");
         var scanner = new SecurityScanner(new ISecurityRule[] { new WebWidgetRule() });
         var result = scanner.Scan(pak);
-        Assert.Equal(Verdict.FlaggedActive, result.Verdict);
-        Assert.Contains(result.Findings, f => f.Rule == "web_widget" && f.Reachable);
+        Assert.Equal(Verdict.FlaggedLatent, result.Verdict);
+        Assert.Contains(result.Findings, f => f.Rule == "web_widget" && !f.Reachable);
     }
 
     [Fact]

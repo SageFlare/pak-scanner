@@ -36,10 +36,12 @@ public sealed class WebWidgetRule : ISecurityRule
 
         var hasMarker = assetNames.Any(a => LaunchUrlRule.NamesIndicateModMarker(a.Names));
 
-        // Delivery is PAK-LEVEL: the web view lives in a UserWidget (UWidget), not the actor, but a
-        // mod actor creates that widget. If the pak contains ANY auto-spawned mod actor (an
-        // ArgonSDKModBase at the AgMods convention path, or a marker is present), the web-widget code
-        // it carries is reachable on load -> flagged-active. Otherwise flagged-latent.
+        // Live-tested 2026-10-06: BrowseToUrl RUNS but makes no HTTP request in retail Chiv2 — the
+        // embedded web view (CEF) is stripped/disabled in the shipping build. So even when an
+        // auto-spawned mod actor creates the widget, the capability does NOT take effect in retail.
+        // We therefore report web_widget as flagged-LATENT (present, not executing as packaged in
+        // retail) regardless of delivery — NOT flagged-active like launch_url (which DID fire live).
+        // We still note whether a delivery path exists, in case a build has CEF enabled.
         var hasAutoSpawnedActor = assetNames.Any(a =>
             LaunchUrlRule.NamesIndicateModActor(a.Names)
             && (LaunchUrlRule.IsAgModsConventionPath(a.Path) || hasMarker));
@@ -49,10 +51,14 @@ public sealed class WebWidgetRule : ISecurityRule
             if (!NamesIndicateWebWidget(names, out var evidence))
                 continue;
 
-            var full = hasAutoSpawnedActor
-                ? evidence + "; created by an auto-spawned mod actor in this pak -> runs on load (SILENT: in-game web view, no external browser)"
-                : evidence + " (SILENT: in-game web view, no external browser)";
-            yield return MakeFinding(path, full, hasAutoSpawnedActor);
+            var deliveryNote = hasAutoSpawnedActor
+                ? "; created by an auto-spawned mod actor in this pak"
+                : "";
+            var full = evidence + deliveryNote
+                + " (in-game web view; BrowseToUrl is INERT in retail Chiv2 per live test - CEF "
+                + "stripped - so present-but-not-executing; still a concern if a build enables CEF)";
+            // Reachable=false: does not take effect in retail -> flagged-latent.
+            yield return MakeFinding(path, full, delivered: false);
         }
     }
 
